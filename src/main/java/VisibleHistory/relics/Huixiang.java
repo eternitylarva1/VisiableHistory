@@ -1,18 +1,17 @@
-package EchoForm.relics;
+package VisibleHistory.relics;
 
-import EchoForm.powers.EchoPower;
+import VisibleHistory.powers.EchoPower;
 import basemod.abstracts.CustomRelic;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 import com.megacrit.cardcrawl.actions.common.ApplyPowerAction;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
-import com.megacrit.cardcrawl.relics.AbstractRelic;
 
 
 public class Huixiang extends CustomRelic {
     public static final String ID = Huixiang.class.getSimpleName();
-    public static final String IMG = "echoFormResources/images/relics/echoform.png";
+    public static final String IMG = "visibleHistoryResources/images/relics/echoform.png";
 
 
     public Huixiang() {

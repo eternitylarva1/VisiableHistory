@@ -3,7 +3,7 @@
 // (powered by FernFlower decompiler)
 //
 
-package EchoForm.powers;
+package VisibleHistory.powers;
 
 import com.megacrit.cardcrawl.actions.utility.UseCardAction;
 import com.megacrit.cardcrawl.cards.AbstractCard;
@@ -13,7 +13,6 @@ import com.megacrit.cardcrawl.localization.PowerStrings;
 import com.megacrit.cardcrawl.monsters.AbstractMonster;
 import com.megacrit.cardcrawl.monsters.beyond.Reptomancer;
 import com.megacrit.cardcrawl.monsters.city.GremlinLeader;
-import com.megacrit.cardcrawl.monsters.exordium.GremlinNob;
 import com.megacrit.cardcrawl.powers.AbstractPower;
 
 public class EchoPower extends AbstractPower {

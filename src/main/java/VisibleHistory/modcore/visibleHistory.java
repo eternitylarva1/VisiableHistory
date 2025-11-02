@@ -1,7 +1,8 @@
-package EchoForm.modcore;
+package VisibleHistory.modcore;
 
 
-import EchoForm.relics.Huixiang;
+import VisibleHistory.relics.Huixiang;
+import VisibleHistory.utils.Summary;
 import basemod.*;
 import basemod.helpers.RelicType;
 import basemod.interfaces.*;
@@ -9,32 +10,35 @@ import com.badlogic.gdx.Gdx;
 import com.evacipated.cardcrawl.modthespire.lib.SpireConfig;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
 import com.google.gson.Gson;
+import com.megacrit.cardcrawl.characters.AbstractPlayer;
+import com.megacrit.cardcrawl.characters.Ironclad;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.localization.Keyword;
 import com.megacrit.cardcrawl.localization.PowerStrings;
 import com.megacrit.cardcrawl.localization.RelicStrings;
-import com.megacrit.cardcrawl.localization.UIStrings;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Map;
 
 
+import static VisibleHistory.utils.Summary.monsterDefeatStats;
 import static com.megacrit.cardcrawl.core.Settings.language;
 import static com.megacrit.cardcrawl.core.Settings.seed;
 
 
 @SpireInitializer
-public class echoForm implements StartActSubscriber,PostDungeonInitializeSubscriber,PostInitializeSubscriber,EditKeywordsSubscriber,OnStartBattleSubscriber, PostBattleSubscriber , EditStringsSubscriber, EditRelicsSubscriber,OnPlayerTurnStartSubscriber { // 实现接口
-    public echoForm() {
+public class visibleHistory implements StartActSubscriber,PostDungeonInitializeSubscriber,PostInitializeSubscriber,EditKeywordsSubscriber,OnStartBattleSubscriber, PostBattleSubscriber , EditStringsSubscriber, EditRelicsSubscriber,OnPlayerTurnStartSubscriber { // 实现接口
+    public visibleHistory() {
         BaseMod.subscribe(this); // 告诉basemod你要订阅事件
     }
     public static int turn=0;
-    public static final String MyModID = "echoForm";
+    public static final String MyModID = "visibleHistory";
     ModPanel settingsPanel = new ModPanel();
     public static SpireConfig config;
     public static boolean hasselected=false;
@@ -43,7 +47,7 @@ public class echoForm implements StartActSubscriber,PostDungeonInitializeSubscri
 
     public static void initialize() throws IOException {
 
-        new echoForm();
+        new visibleHistory();
 
 
     }
@@ -68,8 +72,8 @@ public class echoForm implements StartActSubscriber,PostDungeonInitializeSubscri
         } else {
             lang = "ENG"; // 如果没有相应语言的版本，默认加载英语
         }
-    BaseMod.loadCustomStringsFile(RelicStrings.class, "echoFormResources/localization/" + lang + "/relics.json");
-        BaseMod.loadCustomStringsFile(PowerStrings.class, "echoFormResources/localization/" + lang + "/powers.json");
+    BaseMod.loadCustomStringsFile(RelicStrings.class, "visibleHistoryResources/localization/" + lang + "/relics.json");
+        BaseMod.loadCustomStringsFile(PowerStrings.class, "visibleHistoryResources/localization/" + lang + "/powers.json");
 
     }
     public static float getYPos(float y) {
@@ -80,6 +84,7 @@ public class echoForm implements StartActSubscriber,PostDungeonInitializeSubscri
     }
     @Override
     public void receivePostInitialize() {
+        Summary.load();
 
     }
 
@@ -87,7 +92,16 @@ public class echoForm implements StartActSubscriber,PostDungeonInitializeSubscri
 
     @Override
     public void receiveOnBattleStart(AbstractRoom abstractRoom) {
+        Map<String, Integer> monsterKills = monsterDefeatStats.get("史莱姆");
+        if (monsterKills != null) {
+            monsterKills.forEach((character, count) -> {
+                AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(character);
+                for (int i=0;i<count;i++){
 
+                }
+                System.out.println(character + "被史莱姆击败" + count + "次");
+            });
+        }
     }
    public static void initializeHashmap(){
         if (AbstractDungeon.player==null|| !CardCrawlGame.isInARun()){
@@ -110,7 +124,7 @@ firemap.put(i,istrue);
             lang = "ZHS";
         }
 
-        String json = Gdx.files.internal("echoFormResources/localization/" + lang + "/keywords.json")
+        String json = Gdx.files.internal("visibleHistoryResources/localization/" + lang + "/keywords.json")
                 .readString(String.valueOf(StandardCharsets.UTF_8));
         Keyword[] keywords = gson.fromJson(json, Keyword[].class);
 

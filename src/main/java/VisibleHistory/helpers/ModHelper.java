@@ -1,8 +1,8 @@
-package EchoForm.helpers;
+package VisibleHistory.helpers;
 
 public class ModHelper {
     public static String makePath(String id) {
-        return "eliteBeforeFire:" + id;
+        return "visibleHistory:" + id;
     }
 
 }
