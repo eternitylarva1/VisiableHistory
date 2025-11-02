@@ -1,0 +1,10 @@
+{
+  "modid": "EchoFormofMonster",
+  "name": "如果怪物也会回响形态？",
+  "author_list": ["Dieyou"],
+  "description": "作者@b站蝴蝶是幼虫，战斗开始时，玩家和敌人获得一层回响形态",
+  "version": "0.1.4",
+  "sts_version": "12-22-2020",
+  "mts_version": "3.23.2",
+  "dependencies": ["basemod","stslib"]
+}
