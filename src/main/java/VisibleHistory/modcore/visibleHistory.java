@@ -1,25 +1,37 @@
 package VisibleHistory.modcore;
 
 
+import VisibleHistory.playerdeath.DeadPlayer;
 import VisibleHistory.relics.Huixiang;
+import VisibleHistory.utils.Hpr;
 import VisibleHistory.utils.Summary;
 import basemod.*;
 import basemod.helpers.RelicType;
 import basemod.interfaces.*;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.evacipated.cardcrawl.modthespire.lib.SpireConfig;
 import com.evacipated.cardcrawl.modthespire.lib.SpireInitializer;
 import com.google.gson.Gson;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
+import com.megacrit.cardcrawl.characters.CharacterManager;
 import com.megacrit.cardcrawl.characters.Ironclad;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.Settings;
 import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
+import com.megacrit.cardcrawl.helpers.ImageMaster;
+import com.megacrit.cardcrawl.helpers.MonsterHelper;
+import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.localization.Keyword;
 import com.megacrit.cardcrawl.localization.PowerStrings;
 import com.megacrit.cardcrawl.localization.RelicStrings;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
+import com.megacrit.cardcrawl.rooms.MonsterRoom;
+import com.megacrit.cardcrawl.screens.charSelect.CharacterSelectScreen;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -30,10 +42,12 @@ import java.util.Map;
 import static VisibleHistory.utils.Summary.monsterDefeatStats;
 import static com.megacrit.cardcrawl.core.Settings.language;
 import static com.megacrit.cardcrawl.core.Settings.seed;
+import static com.megacrit.cardcrawl.dungeons.AbstractDungeon.lastCombatMetricKey;
+import static com.megacrit.cardcrawl.helpers.ImageMaster.CAMPFIRE_SMITH_BUTTON;
 
 
 @SpireInitializer
-public class visibleHistory implements StartActSubscriber,PostDungeonInitializeSubscriber,PostInitializeSubscriber,EditKeywordsSubscriber,OnStartBattleSubscriber, PostBattleSubscriber , EditStringsSubscriber, EditRelicsSubscriber,OnPlayerTurnStartSubscriber { // 实现接口
+public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber,StartActSubscriber,PostDungeonInitializeSubscriber,PostInitializeSubscriber,EditKeywordsSubscriber,OnStartBattleSubscriber, PostBattleSubscriber , EditStringsSubscriber, EditRelicsSubscriber,OnPlayerTurnStartSubscriber { // 实现接口
     public visibleHistory() {
         BaseMod.subscribe(this); // 告诉basemod你要订阅事件
     }
@@ -85,21 +99,24 @@ public class visibleHistory implements StartActSubscriber,PostDungeonInitializeS
     @Override
     public void receivePostInitialize() {
         Summary.load();
-
+        testTexture=new Texture("visibleHistoryResources/images/relics/img.png");
     }
 
 
 
     @Override
     public void receiveOnBattleStart(AbstractRoom abstractRoom) {
-        Map<String, Integer> monsterKills = monsterDefeatStats.get("史莱姆");
+        DeadPlayer.deadPlayers.clear();
+        Map<String, Integer> monsterKills = monsterDefeatStats.get(lastCombatMetricKey);
         if (monsterKills != null) {
             monsterKills.forEach((character, count) -> {
                 AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(character);
-                for (int i=0;i<count;i++){
+                AbstractPlayer player= CardCrawlGame.characterManager.getCharacter(playerClass);
 
+                for (int i=0;i<count;i++){
+                    DeadPlayer.deadPlayers.add(new DeadPlayer(Hpr.getRandomPositionX(),Hpr.getRandomPositionY(), player.corpseImg));
                 }
-                System.out.println(character + "被史莱姆击败" + count + "次");
+                System.out.println(character + MonsterHelper.getEncounterName(lastCombatMetricKey) +"击败"+ count + "次");
             });
         }
     }
@@ -144,7 +161,24 @@ firemap.put(i,istrue);
 
     @Override
     public void receivePostDungeonInitialize() {
-        AbstractRelic relic=new Huixiang();
-        relic.instantObtain();
+        Summary.load();
+    }
+    Texture testTexture;;
+    @Override
+    public void receivePostRender(SpriteBatch spriteBatch) {
+        spriteBatch.draw(testTexture, InputHelper.mX,InputHelper.mY);
+        if (!CardCrawlGame.isInARun()){
+            return;
+        }
+        if (AbstractDungeon.player!=null){
+
+        }
+    }
+
+    @Override
+    public void receivePostUpdate() {
+        for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
+         deadPlayer.update();
+        }
     }
 }

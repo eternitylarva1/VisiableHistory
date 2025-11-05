@@ -53,7 +53,15 @@ public class Hpr {
   public static boolean isAlive(AbstractCreature c) {
     return (c != null && !c.isDeadOrEscaped() && !c.isDead);
   }
-  
+
+  public static float getRandomPositionX() {
+
+    return AbstractDungeon.cardRandomRng.random(Settings.WIDTH/2);
+  }
+  public static float getRandomPositionY() {
+
+    return AbstractDungeon.cardRandomRng.random(Settings.HEIGHT);
+  }
   public static int aliveMonstersAmount() {
     int i = 0;
     for (AbstractMonster m : monsters()) {
