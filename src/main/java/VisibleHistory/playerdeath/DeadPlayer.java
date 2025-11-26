@@ -1,6 +1,7 @@
 package VisibleHistory.playerdeath;
 
 import VisibleHistory.modcore.visibleHistory;
+import VisibleHistory.utils.Hpr;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -37,6 +38,11 @@ public class DeadPlayer {
     public boolean flipVertical=false;
     public Hitbox hb;
     private static final float RELIC_SPACE;
+
+    // 新增拖动相关属性
+    public boolean isDragging = false;
+    public boolean isDraggingRequested = false;
+    public boolean showHistory = false;  // 是否显示历史记录
     List<String> relics;
     public static final String[] TEXT;
     String runDate = "";
@@ -70,25 +76,92 @@ public class DeadPlayer {
         Date date = Metrics.timestampFormatter.parse(runs.local_time);
         runDate = dateFormat.format(date);
         reloadCards( runs);
-        /*AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(runs.character_chosen);
-        deadPlayerChosen = CardCrawlGame.characterManager.getCharacter(playerClass).newInstance();
-        deadPlayerChosen.movePosition(this.x+Settings.WIDTH/12,this.y);
-*/
+
+        // 初始化deadPlayerChosen对象用于动画显示
+        try {
+            AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(runs.character_chosen);
+            deadPlayerChosen = CardCrawlGame.characterManager.getCharacter(playerClass).newInstance();
+            deadPlayerChosen.movePosition(this.x + Settings.WIDTH / 12, this.y);
+        } catch (Exception e) {
+            Hpr.info("初始化deadPlayerChosen失败: " + e.getMessage());
+        }
     }
     public void update() {
+        // 更新hitbox检测
         this.hb.update();
-        if (xianshidonghua) {
-            if (this.hb.hovered) {
-                this.deadPlayerChosen.update();
-            }
-            this.x=this.deadPlayerChosen.drawX;
-            this.y=this.deadPlayerChosen.drawY;
+
+        // 更新hitbox位置
+        this.hb.x = this.x;
+        this.hb.y = this.y;
+
+        // 检查鼠标输入
+        checkMouseInput();
+
+        // 处理拖动逻辑
+        if (isDragging) {
+            handleDragging();
         }
 
-        this.hb.x=this.x;
-        this.hb.y=this.y;
+        // 处理动画显示
+        if (showHistory && xianshidonghua) {
+            this.deadPlayerChosen.update();
+            this.x = this.deadPlayerChosen.drawX;
+            this.y = this.deadPlayerChosen.drawY;
+        }
+    }
 
-  }
+    /**
+     * 检查鼠标输入（左键拖动、右键显示历史）
+     */
+    private void checkMouseInput() {
+        // 左键拖动检测
+        if (InputHelper.justClickedLeft && this.hb.hovered && !isDragging) {
+            isDragging = true;
+            isDraggingRequested = true;
+            // 不重置InputHelper.justClickedLeft，让全局处理
+        }
+
+        // 右键显示历史记录检测
+        if (InputHelper.justClickedRight && this.hb.hovered && !isDragging) {
+            showHistory = !showHistory; // 切换历史记录显示状态
+            InputHelper.justClickedRight = false; // 防止与其他右键冲突
+        }
+
+        // 松开鼠标时停止拖动
+        if (InputHelper.justReleasedClickLeft && isDragging) {
+            isDragging = false;
+            InputHelper.justReleasedClickLeft = false;
+        }
+    }
+
+    /**
+     * 处理拖动逻辑
+     */
+    private void handleDragging() {
+        // 获取鼠标位置（考虑缩放）
+        float mouseX = InputHelper.mX;
+        float mouseY = InputHelper.mY;
+
+        // 更新尸体位置到鼠标位置
+        this.x = mouseX - this.hb.width / 2.0f;
+        this.y = mouseY - this.hb.height / 2.0f;
+
+        // 限制尸体在屏幕范围内
+        this.x = Math.max(0, Math.min(this.x, Settings.WIDTH - this.hb.width));
+        this.y = Math.max(0, Math.min(this.y, Settings.HEIGHT - this.hb.height));
+    }
+
+    /**
+     * 静态方法：处理全局鼠标点击事件
+     */
+    public static void handleGlobalMouseInput() {
+        for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
+            if (deadPlayer.isDraggingRequested) {
+                deadPlayer.isDraggingRequested = false;
+                return; // 只处理第一个请求拖动的尸体
+            }
+        }
+    }
     private float screenPos(float val) {
         return val * Settings.scale;
     }
@@ -133,28 +206,46 @@ public class DeadPlayer {
     }
     public void render(SpriteBatch sb) {
         this.hb.render(sb);
-        if (!this.hb.hovered){
-            sb.setColor(1.0f, 1.0f, 1.0f, toumingdu);
-            sb.draw(this.img, this.x , this.y);
-        }else {
+
+        // 鼠标悬停效果：尸体变亮 + 鼠标变成放大镜
+        boolean isHovered = this.hb.hovered;
+
+        if (isHovered) {
             CardCrawlGame.cursor.changeType(GameCursor.CursorType.INSPECT);
+        }
+
+        // 判断是否显示详细信息（右键点击后）
+        boolean shouldShowDetails = showHistory;
+
+        // 渲染尸体
+        if (!isHovered && !shouldShowDetails) {
+            // 默认状态：半透明
+            sb.setColor(1.0f, 1.0f, 1.0f, toumingdu);
+            sb.draw(this.img, this.x, this.y);
+        } else if (isHovered && !shouldShowDetails) {
+            // 鼠标悬停状态：变亮但不显示详细信息
+            sb.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+            sb.draw(this.img, this.x, this.y);
+        } else {
+            // 显示详细信息状态（右键点击后）
             if (xianshidonghua) {
                 sb.setColor(1.0f, 1.0f, 1.0f, toumingdu);
                 renderPlayer(sb);
                 sb.setColor(Color.WHITE);
-            }else {
+            } else {
                 sb.setColor(1.0f, 1.0f, 1.0f, 1.0f);
-                sb.draw(this.img, this.x , this.y);
+                sb.draw(this.img, this.x, this.y);
             }
-            float rendery=this.y;
-            if (this.y<Settings.WIDTH/3){
-                rendery+=Settings.WIDTH/3;
+
+            float rendery = this.y;
+            if (this.y < Settings.WIDTH / 3) {
+                rendery += Settings.WIDTH / 3;
             }
-            if (rendery>=Settings.WIDTH*5/6){
-                rendery=Settings.WIDTH*5/6;
+            if (rendery >= Settings.WIDTH * 5 / 6) {
+                rendery = Settings.WIDTH * 5 / 6;
             }
-            this.renderRelics(sb,this.x,rendery);
-            this.renderDeck(sb,this.x,rendery);
+            this.renderRelics(sb, this.x, rendery);
+            this.renderDeck(sb, this.x, rendery);
         }
 
         sb.setColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -332,6 +423,36 @@ public class DeadPlayer {
             }
             row++;
         }
+    }
+
+    /**
+     * 获取最后生成的DeadPlayer（列表中最后一个元素）
+     */
+    public static DeadPlayer getLastDeadPlayer() {
+        if (deadPlayers != null && !deadPlayers.isEmpty()) {
+            return deadPlayers.get(deadPlayers.size() - 1);
+        }
+        return null;
+    }
+
+    /**
+     * 获取当前所有被hover的尸体中最后生成的那一个
+     */
+    public static DeadPlayer getLastHoveredPlayer() {
+        DeadPlayer lastHovered = null;
+        if (deadPlayers != null) {
+            for (DeadPlayer player : deadPlayers) {
+                // 检查这个尸体是否被鼠标接触
+                if (player.hb.hovered) {
+                    // 如果还没有找到hover的尸体，或者这个尸体比之前找到的更后生成
+                    if (lastHovered == null ||
+                        deadPlayers.indexOf(player) > deadPlayers.indexOf(lastHovered)) {
+                        lastHovered = player;
+                    }
+                }
+            }
+        }
+        return lastHovered;
     }
 
     public static ArrayList<DeadPlayer> deadPlayers=new ArrayList<>();

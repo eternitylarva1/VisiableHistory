@@ -211,6 +211,9 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     @Override
     public void receivePostUpdate() {
         if (CardCrawlGame.isInARun()) {
+            // 处理全局鼠标输入（拖动）
+            DeadPlayer.handleGlobalMouseInput();
+
             for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
                 deadPlayer.update();
             }
