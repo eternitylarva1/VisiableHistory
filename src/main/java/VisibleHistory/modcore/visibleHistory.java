@@ -28,13 +28,17 @@ import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.localization.Keyword;
 import com.megacrit.cardcrawl.localization.PowerStrings;
 import com.megacrit.cardcrawl.localization.RelicStrings;
+import com.megacrit.cardcrawl.localization.UIStrings;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
 import com.megacrit.cardcrawl.screens.charSelect.CharacterSelectScreen;
+import com.megacrit.cardcrawl.screens.runHistory.RunHistoryScreen;
+import com.megacrit.cardcrawl.screens.stats.RunData;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.text.ParseException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -88,6 +92,7 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
         }
     BaseMod.loadCustomStringsFile(RelicStrings.class, "visibleHistoryResources/localization/" + lang + "/relics.json");
         BaseMod.loadCustomStringsFile(PowerStrings.class, "visibleHistoryResources/localization/" + lang + "/powers.json");
+        BaseMod.loadCustomStringsFile(UIStrings.class, "visibleHistoryResources/localization/" + lang + "/ui.json");
 
     }
     public static float getYPos(float y) {
@@ -100,23 +105,56 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     public void receivePostInitialize() {
         Summary.load();
         testTexture=new Texture("visibleHistoryResources/images/relics/img.png");
+
+        BaseMod.registerModBadge(ImageMaster.loadImage("visibleHistoryResources/images/relics/img.png"),MyModID,"Dieyou", "在战斗开始时，每在当前怪物组合手上死过一次，在场上添加一具尸体，可以鼠标放上去查看具体的历史记录", new MyModConfig());
+
     }
 
 
 
     @Override
     public void receiveOnBattleStart(AbstractRoom abstractRoom) {
+        generateDeadPlayer();
+    }
+    public void generateDeadPlayer(){
         DeadPlayer.deadPlayers.clear();
-        Map<String, Integer> monsterKills = monsterDefeatStats.get(lastCombatMetricKey);
-        if (monsterKills != null) {
-            monsterKills.forEach((character, count) -> {
-                AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(character);
-                AbstractPlayer player= CardCrawlGame.characterManager.getCharacter(playerClass);
 
-                for (int i=0;i<count;i++){
-                    DeadPlayer.deadPlayers.add(new DeadPlayer(Hpr.getRandomPositionX(),Hpr.getRandomPositionY(), player.corpseImg));
+// 1. 获取当前怪物对应的「角色-失败记录」映射（替换原有的次数映射）
+        Map<String, Summary.FailureRecord> monsterFailureRecords = Summary.getCharacterFailureRecords(lastCombatMetricKey);
+
+        if (monsterFailureRecords != null && !monsterFailureRecords.isEmpty()) {
+            monsterFailureRecords.forEach((character, failureRecord) -> {
+                try {
+
+                    // 2. 解析角色类、获取角色尸体图片（保留原有逻辑）
+                    AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(character);
+                    AbstractPlayer player = CardCrawlGame.characterManager.getCharacter(playerClass);
+                    Texture corpseImg = player.corpseImg;
+
+                    // 3. 遍历该角色被当前怪物击败的所有 RunData（一个 RunData 对应一个 DeadPlayer）
+                    for (RunData runData : failureRecord.runList) {
+                        // 4. 传入随机位置、尸体图片、对应 RunData 创建 DeadPlayer
+                        DeadPlayer deadPlayer = new DeadPlayer(
+                                Hpr.getRandomPositionX(),
+                                Hpr.getRandomPositionY(),
+                                corpseImg,
+                                runData  // 新增：传入当前失败对局的 RunData
+                        );
+                        if(DeadPlayer.deadPlayers.size()<=MyModConfig.DeadPlayerMax) {
+                            DeadPlayer.deadPlayers.add(deadPlayer);
+                        }
+                    }
+
+                    // 5. 保留原有打印逻辑（次数 = RunData 列表大小，结果和之前一致）
+                    String monsterName = MonsterHelper.getEncounterName(lastCombatMetricKey);
+                    int defeatCount = failureRecord.count;
+                    System.out.println(character + " 被 " + monsterName + " 击败 " + defeatCount + " 次");
+                } catch (IllegalArgumentException e) {
+                    // 异常处理：避免无效角色类导致崩溃（保留容错性）
+                    Hpr.info("无效角色类：" + character + "，跳过该角色的尸体生成");
+                } catch (ParseException e) {
+                    throw new RuntimeException(e);
                 }
-                System.out.println(character + MonsterHelper.getEncounterName(lastCombatMetricKey) +"击败"+ count + "次");
             });
         }
     }
@@ -129,7 +167,7 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
         for(int i=0;i<1000;i++){
             boolean istrue;
             istrue=rng.randomBoolean(0.7f);
-firemap.put(i,istrue);
+            firemap.put(i,istrue);
 
         }
    }
@@ -163,22 +201,19 @@ firemap.put(i,istrue);
     public void receivePostDungeonInitialize() {
         Summary.load();
     }
-    Texture testTexture;;
+    public static Texture testTexture;;
     @Override
     public void receivePostRender(SpriteBatch spriteBatch) {
-        spriteBatch.draw(testTexture, InputHelper.mX,InputHelper.mY);
-        if (!CardCrawlGame.isInARun()){
-            return;
-        }
-        if (AbstractDungeon.player!=null){
 
-        }
+
     }
 
     @Override
     public void receivePostUpdate() {
-        for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
-         deadPlayer.update();
+        if (CardCrawlGame.isInARun()) {
+            for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
+                deadPlayer.update();
+            }
         }
     }
 }

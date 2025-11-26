@@ -23,11 +23,13 @@ public class CamfirePatch {
         @SpirePostfixPatch
         public static void Postfix(AbstractPlayer _instance, SpriteBatch sb) {
             if (!(AbstractDungeon.getCurrRoom() instanceof RestRoom)) {
-                for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
-                    Color oldcolor=sb.getColor();
-                   sb.setColor(Color.WHITE);
-                    deadPlayer.render(sb);
-                    sb.setColor(oldcolor);
+                if (_instance==AbstractDungeon.player) {
+                    for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
+                        Color oldcolor = sb.getColor();
+                        sb.setColor(Color.WHITE);
+                        deadPlayer.render(sb);
+                        sb.setColor(oldcolor);
+                    }
                 }
             }
         }

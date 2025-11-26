@@ -1,8 +1,10 @@
 {
-  "eliteBeforeFire:DestroyOption": {
-    "TEXT": [
-      "摧毁",
-      "摧毁这个火堆，获得80金币"
-    ]
+  "visibleHistory:MyModConfig": {
+    "TEXT_DICT": {
+      "DeadPlayerMax":"尸体数量上限",
+      "toumingdu": "尸体透明度",
+      "xianshidonghua": "显示玩家动画"
+    }
+
   }
 }

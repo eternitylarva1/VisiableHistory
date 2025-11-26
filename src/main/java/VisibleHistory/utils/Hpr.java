@@ -56,7 +56,7 @@ public class Hpr {
 
   public static float getRandomPositionX() {
 
-    return AbstractDungeon.cardRandomRng.random(Settings.WIDTH/2);
+    return AbstractDungeon.cardRandomRng.random(Settings.WIDTH);
   }
   public static float getRandomPositionY() {
 
