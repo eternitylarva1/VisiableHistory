@@ -3,6 +3,8 @@
     "TEXT_DICT": {
       "DeadPlayerMax":"尸体数量上限",
       "toumingdu": "尸体透明度",
+      "showCards": "显示卡组",
+      "showRelics": "显示遗物",
       "xianshidonghua": "显示玩家动画"
     }
 

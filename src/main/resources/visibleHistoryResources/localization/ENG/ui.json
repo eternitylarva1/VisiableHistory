@@ -1,4 +1,13 @@
 {
+  "visibleHistory:MyModConfig": {
+    "TEXT_DICT": {
+      "DeadPlayerMax": "Corpse Display Limit",
+      "toumingdu": "Corpse Transparency",
+      "showCards": "Show Deck",
+      "showRelics": "Show Relics",
+      "xianshidonghua": "Show Player Animation"
+    }
+  },
   "fakefire:DestroyOption": {
     "TEXT": [
       "Destroy",

@@ -5,6 +5,8 @@ import VisibleHistory.utils.Hpr;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.megacrit.cardcrawl.cards.AbstractCard;
 import com.megacrit.cardcrawl.cards.CardGroup;
 import com.megacrit.cardcrawl.characters.AbstractPlayer;
@@ -20,6 +22,10 @@ import com.megacrit.cardcrawl.relics.TinyChest;
 import com.megacrit.cardcrawl.screens.runHistory.RunHistoryScreen;
 import com.megacrit.cardcrawl.screens.runHistory.TinyCard;
 import com.megacrit.cardcrawl.screens.stats.RunData;
+import com.megacrit.cardcrawl.actions.common.EmptyDeckShuffleAction;
+import com.megacrit.cardcrawl.actions.utility.ShowCardAction;
+import com.megacrit.cardcrawl.actions.utility.UnlimboAction;
+import com.megacrit.cardcrawl.actions.common.DrawCardAction;
 import javafx.scene.shape.Circle;
 
 import java.text.ParseException;
@@ -27,11 +33,24 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static VisibleHistory.modcore.MyModConfig.toumingdu;
-import static VisibleHistory.modcore.MyModConfig.xianshidonghua;
+import static VisibleHistory.modcore.MyModConfig.showCards;
+import static VisibleHistory.modcore.MyModConfig.showRelics;
+
 import static VisibleHistory.modcore.visibleHistory.testTexture;
 import static com.megacrit.cardcrawl.helpers.ImageMaster.CAMPFIRE_SMITH_BUTTON;
 
 public class DeadPlayer {
+    public static ArrayList<DeadPlayer>  deadPlayers=new ArrayList<>();
+
+    // 缓存最后hover的尸体，避免每帧重复计算
+    private static DeadPlayer cachedLastHoveredPlayer = null;
+    private static boolean hoverCacheDirty = true;
+
+    // 双击检测相关变量
+    private static DeadPlayer lastClickedPlayer = null;
+    private static long lastClickTime = 0;
+    private static final long DOUBLE_CLICK_TIME_WINDOW = 500; // 双击时间窗口（毫秒）
+
     public float x;
     public float y;
     public Texture img;
@@ -58,6 +77,9 @@ public class DeadPlayer {
     private static final String RARITY_LABEL_UNKNOWN;
     private static final String RARITY_LABEL_CURSE;
     AbstractPlayer deadPlayerChosen;
+    private RunData runData; // 延迟加载的Run数据
+    private boolean cardsLoaded = false; // 卡组是否已加载
+    private boolean dataLoaded = false; // 通用数据是否已加载(用于遗物显示)
     public DeadPlayer(float x, float y, Texture img, RunData runs) throws ParseException {
         this.x=x;
         this.y=y;
@@ -66,27 +88,54 @@ public class DeadPlayer {
         this.hb.x=this.x+100;
         this.hb.y=this.y;
         relics=runs.relics;
-        SimpleDateFormat dateFormat;
-        if (Settings.language == Settings.GameLanguage.JPN) {
-            // 日语使用游戏语言包中的格式（TEXT[34]来自UI语言包“RunHistoryScreen”）
-            dateFormat = new SimpleDateFormat(TEXT[34], Locale.JAPAN);
-        } else {
-            // 其他语言使用默认格式（TEXT[34]例如“yyyy-MM-dd HH:mm”）
-            dateFormat = new SimpleDateFormat(TEXT[34]);
-        }
-        Date date = Metrics.timestampFormatter.parse(runs.local_time);
-        runDate = dateFormat.format(date);
-        reloadCards( runs);
 
-        // 初始化deadPlayerChosen对象用于动画显示
+        // 延迟初始化 - 只在需要时才加载详细数据
+        this.runData = runs;
+
+        // 简单的日期处理，避免重复创建格式化器
         try {
-            AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(runs.character_chosen);
-            deadPlayerChosen = CardCrawlGame.characterManager.getCharacter(playerClass).newInstance();
-            deadPlayerChosen.movePosition(this.x + Settings.WIDTH / 12, this.y);
+            Date date = Metrics.timestampFormatter.parse(runs.local_time);
+            // 使用简单的数字格式，避免复杂的本地化逻辑
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
+            runDate = dateFormat.format(date);
         } catch (Exception e) {
-            Hpr.info("初始化deadPlayerChosen失败: " + e.getMessage());
+            runDate = runs.local_time.substring(0, Math.min(16, runs.local_time.length()));
         }
     }
+
+    /**
+     * 延迟加载卡组和玩家动画（仅在首次需要时加载）
+     */
+    private void lazyLoadDataIfNeeded() {
+        if (!dataLoaded && runData != null) {
+            try {
+                // 根据配置决定是否加载卡组数据
+                if (showCards) {
+                    reloadCards(runData);
+                    cardsLoaded = true;
+                }
+
+                // 延迟加载玩家动画
+                try {
+                    if (deadPlayerChosen == null && runData.character_chosen != null) {
+                        AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(runData.character_chosen);
+                        deadPlayerChosen = CardCrawlGame.characterManager.getCharacter(playerClass).newInstance();
+                        deadPlayerChosen.movePosition(this.x + Settings.WIDTH / 12, this.y);
+                    }
+                } catch (Exception e) {
+                    Hpr.info("初始化deadPlayerChosen失败: " + e.getMessage());
+                    deadPlayerChosen = null;
+                }
+
+                // 标记为已加载
+                dataLoaded = true;
+            } catch (Exception e) {
+                Hpr.info("延迟加载数据失败: " + e.getMessage());
+                dataLoaded = true; // 即使失败也标记为已加载，避免重复尝试
+            }
+        }
+    }
+
     public void update() {
         if (AbstractDungeon.screen!= AbstractDungeon.CurrentScreen.NONE){
             return;
@@ -105,24 +154,29 @@ public class DeadPlayer {
         if (isDragging) {
             handleDragging();
         }
-
+/*
         // 处理动画显示
         if (showHistory && xianshidonghua) {
             this.deadPlayerChosen.update();
             this.x = this.deadPlayerChosen.drawX;
             this.y = this.deadPlayerChosen.drawY;
-        }
+        }*/
     }
 
     /**
-     * 检查鼠标输入（左键拖动、右键+悬停显示历史）
+     * 检查鼠标输入（左键拖动、右键+悬停显示历史、Ctrl+双击转换）
      */
     private void checkMouseInput() {
         // 左键拖动检测
         if (InputHelper.justClickedLeft && this.hb.hovered && !isDragging) {
-            isDragging = true;
-            isDraggingRequested = true;
-            // 不重置InputHelper.justClickedLeft，让全局处理
+            // 检查Ctrl+双击
+            checkCtrlDoubleClick();
+
+            // 如果不是Ctrl+双击，则进行拖动
+            if (!isCtrlDoubleClick()) {
+                isDragging = true;
+                isDraggingRequested = true;
+            }
         }
 
         // 右键显示历史记录检测 - 只有右键按住且悬停时才显示
@@ -154,6 +208,184 @@ public class DeadPlayer {
         // 限制尸体在屏幕范围内
         this.x = Math.max(0, Math.min(this.x, Settings.WIDTH - this.hb.width));
         this.y = Math.max(0, Math.min(this.y, Settings.HEIGHT - this.hb.height));
+    }
+
+    private static boolean ctrlDoubleClickTriggered = false;
+
+    /**
+     * 检查当前是否是Ctrl+双击
+     */
+    private boolean isCtrlDoubleClick() {
+        return ctrlDoubleClickTriggered;
+    }
+
+    /**
+     * 检查并处理Ctrl+双击逻辑
+     */
+    private void checkCtrlDoubleClick() {
+        ctrlDoubleClickTriggered = false;
+
+        // 检测Ctrl键是否被按下
+        boolean ctrlPressed = Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT) ||
+                              Gdx.input.isKeyPressed(Input.Keys.CONTROL_RIGHT);
+
+        // 只有在Ctrl键按下时才检测双击
+        if (!ctrlPressed) {
+            // 如果没有按Ctrl，只记录第一次点击但不触发双击
+            long currentTime = System.currentTimeMillis();
+            lastClickedPlayer = this;
+            lastClickTime = currentTime;
+            return;
+        }
+
+        // Ctrl已按下，检查是否是同一个尸体的双击
+        long currentTime = System.currentTimeMillis();
+        if (this == lastClickedPlayer && (currentTime - lastClickTime) < DOUBLE_CLICK_TIME_WINDOW) {
+            // 这是Ctrl+双击，触发转换功能
+            ctrlDoubleClickTriggered = true;
+            performTransformation();
+
+            // 重置点击记录
+            lastClickedPlayer = null;
+            lastClickTime = 0;
+        } else {
+            // 第一次点击，更新记录
+            lastClickedPlayer = this;
+            lastClickTime = currentTime;
+        }
+    }
+
+    /**
+     * 执行卡组和遗物转换功能
+     */
+    private void performTransformation() {
+        if (AbstractDungeon.player == null || runData == null) {
+            return;
+        }
+
+        try {
+            // 1. 转换卡组
+            transformPlayerDeck();
+
+            // 2. 转换遗物
+            transformPlayerRelics();
+
+            // 3. 移除当前尸体
+            removeThisCorpse();
+
+            Hpr.info("成功转换卡组和遗物，并移除了尸体");
+        } catch (Exception e) {
+            Hpr.info("转换过程中出现错误: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 转换玩家卡组到尸体的卡组
+     */
+    private void transformPlayerDeck() {
+        if (runData.master_deck == null || runData.master_deck.isEmpty()) {
+            return;
+        }
+
+        // 清空当前卡组
+        AbstractDungeon.player.masterDeck.clear();
+
+        // 根据尸体的卡组数据添加卡牌
+        for (String cardID : runData.master_deck) {
+            AbstractCard card = cardForName(runData, cardID);
+            if (card != null) {
+                AbstractDungeon.player.masterDeck.addToBottom(card);
+            }
+        }
+
+        // 重新洗牌，将卡组分配到各个区域
+        redistributeCards();
+
+        Hpr.info("已将玩家卡组转换为尸体的卡组，包含 " + runData.master_deck.size() + " 张卡牌");
+    }
+
+    /**
+     * 重新分配卡牌到各个卡组区域（抽牌堆、手牌、弃牌堆）
+     */
+    private void redistributeCards() {
+        // 清空所有战斗中的卡牌堆
+        AbstractDungeon.player.drawPile.clear();
+        AbstractDungeon.player.hand.clear();
+        AbstractDungeon.player.discardPile.clear();
+
+        // 将主卡组的所有卡牌移到抽牌堆
+        for (AbstractCard card : AbstractDungeon.player.masterDeck.group) {
+            AbstractDungeon.player.drawPile.addToBottom(card.makeStatEquivalentCopy());
+        }
+
+        // 抽取初始手牌
+        int handSize = Math.min(5, AbstractDungeon.player.drawPile.size());
+        for (int i = 0; i < handSize; i++) {
+            AbstractDungeon.actionManager.addToBottom(new DrawCardAction(1));
+
+        }
+    }
+
+    /**
+     * 转换玩家遗物到尸体的遗物
+     */
+    private void transformPlayerRelics() {
+        if (relics == null || relics.isEmpty()) {
+            return;
+        }
+
+        // 先移除所有当前遗物（触发onUnequip）
+        for (AbstractRelic relic : new ArrayList<>(AbstractDungeon.player.relics)) {
+            AbstractDungeon.player.loseRelic(relic.relicId);
+        }
+int i=0;
+        // 添加尸体的遗物
+        for (String relicID : relics) {
+            try {
+                AbstractRelic relic = RelicLibrary.getRelic(relicID).makeCopy();
+                if (relic != null) {
+                    relic.isSeen = true;
+                 relic. instantObtain(AbstractDungeon.player, i,true);
+                 i++;
+                }
+            } catch (Exception e) {
+                Hpr.info("无法添加遗物 " + relicID + ": " + e.getMessage());
+            }
+        }
+
+        Hpr.info("已将玩家遗物转换为尸体的遗物，包含 " + relics.size() + " 个遗物");
+    }
+
+    /**
+     * 移除当前尸体（仅当前战斗）
+     */
+    private void removeThisCorpse() {
+        // 使用安全的方式移除尸体，避免ConcurrentModificationException
+        markForRemoval(this);
+        Hpr.info("标记尸体移除，当前剩余尸体数量: " + deadPlayers.size());
+    }
+
+    // 需要移除的尸体列表
+    private static ArrayList<DeadPlayer> corpsesToRemove = new ArrayList<>();
+
+    /**
+     * 安全标记尸体需要在下一帧移除
+     */
+    private static void markForRemoval(DeadPlayer corpse) {
+        corpsesToRemove.add(corpse);
+    }
+
+    /**
+     * 处理需要移除的尸体（在每帧更新前调用）
+     */
+    public static void processRemovals() {
+        if (!corpsesToRemove.isEmpty()) {
+            deadPlayers.removeAll(corpsesToRemove);
+            invalidateHoverCache();
+            int removedCount = corpsesToRemove.size();
+            corpsesToRemove.clear();
+            Hpr.info("安全移除了 " + removedCount + " 个尸体，剩余尸体数量: " + deadPlayers.size());
+        }
     }
 
     /**
@@ -228,6 +460,11 @@ public class DeadPlayer {
         // 判断是否应该显示详细信息（右键按住 + 当前是最后hover的尸体）
         boolean shouldShowHistory = showHistory && (lastHoveredPlayer == this);
 
+        // 如果需要显示详细数据，触发延迟加载
+        if (shouldShowHistory || (showHistory && isHovered)) {
+            lazyLoadDataIfNeeded();
+        }
+
         // 渲染尸体
         if (!isHovered) {
             // 默认状态：半透明
@@ -239,7 +476,7 @@ public class DeadPlayer {
             sb.draw(this.img, this.x, this.y);
         } else {
             // 显示详细信息状态（右键按住 + 是最后hover的尸体）
-            if (xianshidonghua) {
+            if (false && deadPlayerChosen != null) {
                 sb.setColor(1.0f, 1.0f, 1.0f, toumingdu);
                 renderPlayer(sb);
                 sb.setColor(Color.WHITE);
@@ -248,11 +485,21 @@ public class DeadPlayer {
                 sb.draw(this.img, this.x, this.y);
             }
 
-            // 调整y位置以确保历史记录始终在屏幕内
-            float adjustedY = adjustYPositionForScreenBoundary(this.y);
+            // 确保数据已加载后再显示历史记录
+            if (dataLoaded) {
+                // 调整y位置以确保历史记录始终在屏幕内
+                float adjustedY = adjustYPositionForScreenBoundary(this.y);
 
-            this.renderRelics(sb, this.x, adjustedY);
-            this.renderDeck(sb, this.x, adjustedY);
+                // 根据配置决定是否显示遗物
+                if (showRelics) {
+                    this.renderRelics(sb, this.x, adjustedY);
+                }
+
+                // 根据配置决定是否显示卡组
+                if (showCards && cardsLoaded) {
+                    this.renderDeck(sb, this.x, adjustedY);
+                }
+            }
         }
 
         sb.setColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -468,23 +715,38 @@ public class DeadPlayer {
      * 获取当前所有被hover的尸体中最后生成的那一个
      */
     public static DeadPlayer getLastHoveredPlayer() {
-        DeadPlayer lastHovered = null;
+        // 如果缓存失效，重新计算
+        if (hoverCacheDirty || cachedLastHoveredPlayer == null) {
+            updateLastHoveredCache();
+        }
+        return cachedLastHoveredPlayer;
+    }
+
+    /**
+     * 更新最后hover尸体缓存
+     */
+    private static void updateLastHoveredCache() {
+        cachedLastHoveredPlayer = null;
         if (deadPlayers != null) {
-            for (DeadPlayer player : deadPlayers) {
-                // 检查这个尸体是否被鼠标接触
+            for (int i = deadPlayers.size() - 1; i >= 0; i--) {
+                // 从后往前遍历，找到第一个hover的尸体就是最后生成的
+                DeadPlayer player = deadPlayers.get(i);
                 if (player.hb.hovered) {
-                    // 如果还没有找到hover的尸体，或者这个尸体比之前找到的更后生成
-                    if (lastHovered == null ||
-                        deadPlayers.indexOf(player) > deadPlayers.indexOf(lastHovered)) {
-                        lastHovered = player;
-                    }
+                    cachedLastHoveredPlayer = player;
+                    break;
                 }
             }
         }
-        return lastHovered;
+        hoverCacheDirty = false;
     }
 
-    public static ArrayList<DeadPlayer> deadPlayers=new ArrayList<>();
+    /**
+     * 标记hover缓存需要更新
+     */
+    public static void invalidateHoverCache() {
+        hoverCacheDirty = true;
+    }
+
     static {
         RELIC_SPACE = 64.0F * Settings.scale;
        ;

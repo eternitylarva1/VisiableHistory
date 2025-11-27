@@ -118,6 +118,8 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     }
     public void generateDeadPlayer(){
         DeadPlayer.deadPlayers.clear();
+        // 重置hover缓存
+        DeadPlayer.invalidateHoverCache();
 
 // 1. 获取当前怪物对应的「角色-失败记录」映射（替换原有的次数映射）
         Map<String, Summary.FailureRecord> monsterFailureRecords = Summary.getCharacterFailureRecords(lastCombatMetricKey);
@@ -193,7 +195,7 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
 
     @Override
     public void receivePostBattle(AbstractRoom abstractRoom) {
-
+        DeadPlayer.deadPlayers.clear();
     }
 
 
@@ -211,6 +213,11 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     @Override
     public void receivePostUpdate() {
         if (CardCrawlGame.isInARun()) {
+            // 处理尸体移除（在更新前执行，避免并发修改异常）
+            DeadPlayer.processRemovals();
+
+            // 标记hover缓存需要更新（每帧更新一次以确保鼠标移动时能正确响应）
+            DeadPlayer.invalidateHoverCache();
             // 处理全局鼠标输入（拖动）
             DeadPlayer.handleGlobalMouseInput();
 
