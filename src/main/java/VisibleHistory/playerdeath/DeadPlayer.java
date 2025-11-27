@@ -11,6 +11,7 @@ import com.megacrit.cardcrawl.characters.AbstractPlayer;
 import com.megacrit.cardcrawl.core.CardCrawlGame;
 import com.megacrit.cardcrawl.core.GameCursor;
 import com.megacrit.cardcrawl.core.Settings;
+import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.helpers.*;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
 import com.megacrit.cardcrawl.metrics.Metrics;
@@ -87,6 +88,9 @@ public class DeadPlayer {
         }
     }
     public void update() {
+        if (AbstractDungeon.screen!= AbstractDungeon.CurrentScreen.NONE){
+            return;
+        }
         // 更新hitbox检测
         this.hb.update();
 
@@ -111,7 +115,7 @@ public class DeadPlayer {
     }
 
     /**
-     * 检查鼠标输入（左键拖动、右键显示历史）
+     * 检查鼠标输入（左键拖动、右键+悬停显示历史）
      */
     private void checkMouseInput() {
         // 左键拖动检测
@@ -121,10 +125,11 @@ public class DeadPlayer {
             // 不重置InputHelper.justClickedLeft，让全局处理
         }
 
-        // 右键显示历史记录检测
-        if (InputHelper.justClickedRight && this.hb.hovered && !isDragging) {
-            showHistory = !showHistory; // 切换历史记录显示状态
-            InputHelper.justClickedRight = false; // 防止与其他右键冲突
+        // 右键显示历史记录检测 - 只有右键按住且悬停时才显示
+        if (InputHelper.isMouseDown_R && this.hb.hovered && !isDragging) {
+            showHistory = true;
+        } else {
+            showHistory = false;
         }
 
         // 松开鼠标时停止拖动
@@ -188,6 +193,9 @@ public class DeadPlayer {
         float relicStartX = x + this.screenPosX(30.0F) + RELIC_SPACE / 2.0F;
         float relicStartY = y - RELIC_SPACE - this.screenPosY(10.0F);
 
+        // 确保y坐标在屏幕范围内
+        float adjustedY = adjustYPositionForScreenBoundary(relicStartY);
+
         for(String rs : this.relics) {
             if (col == 15) {
                 col = 0;
@@ -196,13 +204,13 @@ public class DeadPlayer {
             AbstractRelic r= RelicLibrary.getRelic(rs).makeCopy();
             r.isSeen=true;
             r.currentX = relicStartX + RELIC_SPACE * (float)col;
-            r.currentY = relicStartY - RELIC_SPACE * (float)row;
+            r.currentY = adjustedY - RELIC_SPACE * (float)row;
             r.hb.move(r.currentX, r.currentY);
             r.render(sb, false, Settings.TWO_THIRDS_TRANSPARENT_BLACK_COLOR);
             ++col;
         }
 
-        return relicStartY - RELIC_SPACE * (float)row;
+        return adjustedY - RELIC_SPACE * (float)row;
     }
     public void render(SpriteBatch sb) {
         this.hb.render(sb);
@@ -214,20 +222,23 @@ public class DeadPlayer {
             CardCrawlGame.cursor.changeType(GameCursor.CursorType.INSPECT);
         }
 
-        // 判断是否显示详细信息（右键点击后）
-        boolean shouldShowDetails = showHistory;
+        // 获取当前所有hover尸体中最后生成的那一个
+        DeadPlayer lastHoveredPlayer = getLastHoveredPlayer();
+
+        // 判断是否应该显示详细信息（右键按住 + 当前是最后hover的尸体）
+        boolean shouldShowHistory = showHistory && (lastHoveredPlayer == this);
 
         // 渲染尸体
-        if (!isHovered && !shouldShowDetails) {
+        if (!isHovered) {
             // 默认状态：半透明
             sb.setColor(1.0f, 1.0f, 1.0f, toumingdu);
             sb.draw(this.img, this.x, this.y);
-        } else if (isHovered && !shouldShowDetails) {
+        } else if (isHovered && !shouldShowHistory) {
             // 鼠标悬停状态：变亮但不显示详细信息
             sb.setColor(1.0f, 1.0f, 1.0f, 1.0f);
             sb.draw(this.img, this.x, this.y);
         } else {
-            // 显示详细信息状态（右键点击后）
+            // 显示详细信息状态（右键按住 + 是最后hover的尸体）
             if (xianshidonghua) {
                 sb.setColor(1.0f, 1.0f, 1.0f, toumingdu);
                 renderPlayer(sb);
@@ -237,20 +248,17 @@ public class DeadPlayer {
                 sb.draw(this.img, this.x, this.y);
             }
 
-            float rendery = this.y;
-            if (this.y < Settings.WIDTH / 3) {
-                rendery += Settings.WIDTH / 3;
-            }
-            if (rendery >= Settings.WIDTH * 5 / 6) {
-                rendery = Settings.WIDTH * 5 / 6;
-            }
-            this.renderRelics(sb, this.x, rendery);
-            this.renderDeck(sb, this.x, rendery);
+            // 调整y位置以确保历史记录始终在屏幕内
+            float adjustedY = adjustYPositionForScreenBoundary(this.y);
+
+            this.renderRelics(sb, this.x, adjustedY);
+            this.renderDeck(sb, this.x, adjustedY);
         }
 
         sb.setColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-//TODO 1.优化交互（右键拖动交互） 2.增加设置界面+显示上限√（1.显示尸体数量 2.透明度 3.位置）(---)
+//TODO 1.优化交互（右键拖动交互） 2.增加设置界面+显示上限√（1.显示尸体数量 2.透明度 3.位置）(done)
+        // 交互方式已改为：右键按住+悬停显示历史记录，左键拖动尸体
 
         // FontHelper.renderFont(sb,FontHelper.largeCardFont,"测试位置",this.x,this.y, Color.WHITE);
     }
@@ -261,6 +269,7 @@ public class DeadPlayer {
 
     private static final AbstractCard.CardRarity[] orderedRarity= new AbstractCard.CardRarity[]{AbstractCard.CardRarity.SPECIAL, AbstractCard.CardRarity.RARE, AbstractCard.CardRarity.UNCOMMON, AbstractCard.CardRarity.COMMON, AbstractCard.CardRarity.BASIC, AbstractCard.CardRarity.CURSE};
     ;
+
     private void renderDeck(SpriteBatch sb, float x, float y) {
 
         this.screenX = MathHelper.uiLerpSnap(this.screenX, this.targetX);
@@ -275,6 +284,26 @@ public class DeadPlayer {
         String mainText = String.format(LABEL_WITH_COUNT_IN_PARENS, new Object[] { TEXT[9], Integer.valueOf(cardCount) });
         renderSubHeadingWithMessage(sb, mainText, "", x, y-100);
     }
+
+    /**
+     * 调整y坐标以确保历史记录始终在屏幕内
+     * 如果位置超出屏幕上半部分，则向下移动半个屏幕的距离
+     * @param y 原始y坐标
+     * @return 调整后的y坐标
+     */
+    private float adjustYPositionForScreenBoundary(float y) {
+        // 如果y坐标在屏幕的上半部分（前1/3），则将其向下移动半个屏幕的高度
+        if (y < Settings.HEIGHT / 3) {
+            return y + Settings.HEIGHT / 2;
+        }
+        // 如果调整后的位置超出了屏幕下半部分，则将其限制在屏幕内
+        else if (y > Settings.HEIGHT * 2 / 3) {
+            return Settings.HEIGHT * 2 / 3;
+        }
+        // 否则保持原位置
+        return y;
+    }
+
     private void reloadCards(RunData runData) {
         Hashtable<String, AbstractCard> rawNameToCards = new Hashtable();
         Hashtable<AbstractCard, Integer> cardCounts = new Hashtable();
