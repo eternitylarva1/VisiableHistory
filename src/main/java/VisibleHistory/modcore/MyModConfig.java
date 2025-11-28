@@ -23,5 +23,7 @@ public class MyModConfig extends EasyConfigPanel {
 
     public static boolean showRelics = true;
 
+    public static boolean ctrlClickTransform = true;
+
    // public static boolean xianshidonghua=false;
 }

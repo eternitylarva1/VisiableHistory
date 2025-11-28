@@ -5,6 +5,7 @@
       "toumingdu": "Corpse Transparency",
       "showCards": "Show Deck",
       "showRelics": "Show Relics",
+      "ctrlClickTransform": "Ctrl+Double-click to swap deck and relics?",
       "xianshidonghua": "Show Player Animation"
     }
   },

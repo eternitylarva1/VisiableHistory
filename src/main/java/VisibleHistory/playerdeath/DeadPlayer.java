@@ -35,6 +35,7 @@ import java.util.*;
 import static VisibleHistory.modcore.MyModConfig.toumingdu;
 import static VisibleHistory.modcore.MyModConfig.showCards;
 import static VisibleHistory.modcore.MyModConfig.showRelics;
+import static VisibleHistory.modcore.MyModConfig.ctrlClickTransform;
 
 import static VisibleHistory.modcore.visibleHistory.testTexture;
 import static com.megacrit.cardcrawl.helpers.ImageMaster.CAMPFIRE_SMITH_BUTTON;
@@ -243,7 +244,13 @@ public class DeadPlayer {
         if (this == lastClickedPlayer && (currentTime - lastClickTime) < DOUBLE_CLICK_TIME_WINDOW) {
             // 这是Ctrl+双击，触发转换功能
             ctrlDoubleClickTriggered = true;
-            performTransformation();
+
+            // 检查配置选项是否启用
+            if (ctrlClickTransform) {
+                performTransformation();
+            } else {
+                Hpr.info("Ctrl+双击转换功能已在设置中禁用");
+            }
 
             // 重置点击记录
             lastClickedPlayer = null;
