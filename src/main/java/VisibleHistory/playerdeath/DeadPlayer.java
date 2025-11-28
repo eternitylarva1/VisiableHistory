@@ -64,6 +64,7 @@ public class DeadPlayer {
     public boolean isDragging = false;
     public boolean isDraggingRequested = false;
     public boolean showHistory = false;  // 是否显示历史记录
+    public boolean isRevived = false;    // 是否已复活（显示活着的玩家而不是尸体）
     List<String> relics;
     public static final String[] TEXT;
     String runDate = "";
@@ -154,6 +155,19 @@ public class DeadPlayer {
         // 处理拖动逻辑
         if (isDragging) {
             handleDragging();
+        }
+
+        // 处理复活玩家的动画更新
+        if (isRevived && deadPlayerChosen != null) {
+            this.deadPlayerChosen.update();
+            // 让尸体位置跟随玩家动画位置
+            if (showHistory && false) { // 可选：让复活玩家也跟随动画
+                this.x = this.deadPlayerChosen.drawX;
+                this.y = this.deadPlayerChosen.drawY;
+            } else {
+                // 否则让玩家位置跟随尸体位置
+                deadPlayerChosen.movePosition(this.x + Settings.WIDTH / 12, this.y);
+            }
         }
 /*
         // 处理动画显示
@@ -366,7 +380,7 @@ int i=0;
     /**
      * 移除当前尸体（仅当前战斗）
      */
-    private void removeThisCorpse() {
+    public void removeThisCorpse() {
         // 使用安全的方式移除尸体，避免ConcurrentModificationException
         markForRemoval(this);
         Hpr.info("标记尸体移除，当前剩余尸体数量: " + deadPlayers.size());
@@ -393,6 +407,28 @@ int i=0;
             corpsesToRemove.clear();
             Hpr.info("安全移除了 " + removedCount + " 个尸体，剩余尸体数量: " + deadPlayers.size());
         }
+    }
+
+    /**
+     * 复活这具尸体 - 让尸体开始渲染活着的玩家
+     */
+    public void reviveCorpse() {
+        if (!isRevived) {
+            isRevived = true;
+            // 确保玩家数据已加载
+            lazyLoadDataIfNeeded();
+            Hpr.info("尸体已被复活，现在将显示活着的玩家");
+        }
+    }
+
+    /**
+     * 获取角色名称
+     */
+    public String getCharacterName() {
+        if (runData != null && runData.character_chosen != null) {
+            return runData.character_chosen;
+        }
+        return "未知角色";
     }
 
     /**
@@ -473,8 +509,18 @@ int i=0;
         }
 
         // 渲染尸体
-        if (!isHovered) {
-            // 默认状态：半透明
+        // 如果已复活，显示活着的玩家而不是尸体
+        if (isRevived && deadPlayerChosen != null) {
+            // 复活状态：显示活着的玩家
+            sb.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+
+            // 更新玩家动画
+            deadPlayerChosen.update();
+
+            // 渲染活着的玩家
+            renderPlayer(sb);
+        } else if (!isHovered) {
+            // 默认状态：半透明尸体
             sb.setColor(1.0f, 1.0f, 1.0f, toumingdu);
             sb.draw(this.img, this.x, this.y);
         } else if (isHovered && !shouldShowHistory) {

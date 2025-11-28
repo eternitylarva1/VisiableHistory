@@ -1,6 +1,7 @@
 package VisibleHistory.modcore;
 
 
+import VisibleHistory.cards.CorpseRevival;
 import VisibleHistory.playerdeath.DeadPlayer;
 import VisibleHistory.relics.Huixiang;
 import VisibleHistory.utils.Hpr;
@@ -25,6 +26,7 @@ import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import com.megacrit.cardcrawl.helpers.ImageMaster;
 import com.megacrit.cardcrawl.helpers.MonsterHelper;
 import com.megacrit.cardcrawl.helpers.input.InputHelper;
+import com.megacrit.cardcrawl.localization.CardStrings;
 import com.megacrit.cardcrawl.localization.Keyword;
 import com.megacrit.cardcrawl.localization.PowerStrings;
 import com.megacrit.cardcrawl.localization.RelicStrings;
@@ -51,7 +53,7 @@ import static com.megacrit.cardcrawl.helpers.ImageMaster.CAMPFIRE_SMITH_BUTTON;
 
 
 @SpireInitializer
-public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber,StartActSubscriber,PostDungeonInitializeSubscriber,PostInitializeSubscriber,EditKeywordsSubscriber,OnStartBattleSubscriber, PostBattleSubscriber , EditStringsSubscriber, EditRelicsSubscriber,OnPlayerTurnStartSubscriber { // 实现接口
+public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber,StartActSubscriber,PostDungeonInitializeSubscriber,PostInitializeSubscriber,EditKeywordsSubscriber,OnStartBattleSubscriber, PostBattleSubscriber , EditStringsSubscriber, EditRelicsSubscriber,EditCardsSubscriber,OnPlayerTurnStartSubscriber { // 实现接口
     public visibleHistory() {
         BaseMod.subscribe(this); // 告诉basemod你要订阅事件
     }
@@ -83,6 +85,11 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     }
 
     @Override
+    public void receiveEditCards() {
+        BaseMod.addCard(new CorpseRevival());
+    }
+
+    @Override
     public void receiveEditStrings() {
         String lang;
         if (language == Settings.GameLanguage.ZHS) {
@@ -92,6 +99,7 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
         }
     BaseMod.loadCustomStringsFile(RelicStrings.class, "visibleHistoryResources/localization/" + lang + "/relics.json");
         BaseMod.loadCustomStringsFile(PowerStrings.class, "visibleHistoryResources/localization/" + lang + "/powers.json");
+        BaseMod.loadCustomStringsFile(CardStrings.class, "visibleHistoryResources/localization/" + lang + "/cards.json");
         BaseMod.loadCustomStringsFile(UIStrings.class, "visibleHistoryResources/localization/" + lang + "/ui.json");
 
     }
