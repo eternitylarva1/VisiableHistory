@@ -22,7 +22,8 @@ public class CamfirePatch {
 
         @SpirePostfixPatch
         public static void Postfix(AbstractPlayer _instance, SpriteBatch sb) {
-            if (!(AbstractDungeon.getCurrRoom() instanceof RestRoom)) {
+            // Add null check for getCurrRoom() to prevent NullPointerException
+            if (AbstractDungeon.getCurrRoom() != null && !(AbstractDungeon.getCurrRoom() instanceof RestRoom)) {
                 if (_instance==AbstractDungeon.player) {
                     for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
                         Color oldcolor = sb.getColor();

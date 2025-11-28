@@ -26,6 +26,12 @@ import com.megacrit.cardcrawl.actions.common.EmptyDeckShuffleAction;
 import com.megacrit.cardcrawl.actions.utility.ShowCardAction;
 import com.megacrit.cardcrawl.actions.utility.UnlimboAction;
 import com.megacrit.cardcrawl.actions.common.DrawCardAction;
+import com.megacrit.cardcrawl.actions.utility.WaitAction;
+import com.megacrit.cardcrawl.actions.AbstractGameAction;
+import com.megacrit.cardcrawl.unlock.UnlockTracker;
+import com.megacrit.cardcrawl.helpers.RelicLibrary;
+import com.megacrit.cardcrawl.helpers.CardLibrary;
+import com.megacrit.cardcrawl.monsters.AbstractMonster;
 import javafx.scene.shape.Circle;
 
 import java.text.ParseException;
@@ -82,6 +88,13 @@ public class DeadPlayer {
     private RunData runData; // 延迟加载的Run数据
     private boolean cardsLoaded = false; // 卡组是否已加载
     private boolean dataLoaded = false; // 通用数据是否已加载(用于遗物显示)
+
+    // 新增：复活后牌堆和显示系统
+    private ArrayList<AbstractCard> revivedDeck = null;  // 复活后的牌堆
+    private ArrayList<AbstractRelic> revivedRelics = null; // 复活后的遗物
+    private AbstractCard displayedCard = null;            // 当前显示在头顶的卡牌
+    private float cardDisplayTimer = 0.0f;                // 卡牌显示计时器
+    private static final float CARD_DISPLAY_DURATION = 3.0f; // 卡牌显示持续时间
     public DeadPlayer(float x, float y, Texture img, RunData runs) throws ParseException {
         this.x=x;
         this.y=y;
@@ -169,6 +182,9 @@ public class DeadPlayer {
                 deadPlayerChosen.movePosition(this.x + Settings.WIDTH / 12, this.y);
             }
         }
+
+        // 更新头顶显示的卡牌
+        updateCardDisplay();
 /*
         // 处理动画显示
         if (showHistory && xianshidonghua) {
@@ -410,14 +426,213 @@ int i=0;
     }
 
     /**
-     * 复活这具尸体 - 让尸体开始渲染活着的玩家
+     * 复活这具尸体 - 让尸体开始渲染活着的玩家，并初始化牌堆和遗物
      */
     public void reviveCorpse() {
         if (!isRevived) {
             isRevived = true;
             // 确保玩家数据已加载
             lazyLoadDataIfNeeded();
-            Hpr.info("尸体已被复活，现在将显示活着的玩家");
+            initializeRevivedPlayer();
+            Hpr.info("尸体已被复活，现在将显示活着的玩家并初始化牌堆和遗物");
+        }
+    }
+
+    /**
+     * 初始化复活玩家的牌堆和遗物系统
+     */
+    private void initializeRevivedPlayer() {
+        // 初始化牌堆
+        if (revivedDeck == null) {
+            revivedDeck = createRevivedDeck();
+        }
+
+        Hpr.info("复活玩家牌堆大小: " + (revivedDeck != null ? revivedDeck.size() : 0));
+    }
+
+    /**
+     * 创建复活后的牌堆（基于历史卡组数据）
+     */
+    private ArrayList<AbstractCard> createRevivedDeck() {
+        ArrayList<AbstractCard> deck = new ArrayList<>();
+        try {
+            if (runData != null && runData.master_deck != null) {
+                for (Object cardObj : runData.master_deck) {
+                    // 这里需要根据实际的TinyCard结构来处理
+                    if (cardObj instanceof String) {
+                        String cardId = (String) cardObj;
+                        try {
+                            AbstractCard card = CardLibrary.getCard(cardId);
+                            if (card != null) {
+                                deck.add(card.makeCopy());
+                            }
+                        } catch (Exception e) {
+                            Hpr.info("无法创建卡牌: " + cardId);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Hpr.info("创建牌堆时出错: " + e.getMessage());
+        }
+        return deck;
+    }
+
+    /**
+     * 创建复活后的遗物列表
+     */
+    private ArrayList<AbstractRelic> createRevivedRelics() {
+        ArrayList<AbstractRelic> relicsList = new ArrayList<>();
+        try {
+            if (relics != null) {
+                for (String relicId : relics) {
+                    try {
+                        AbstractRelic relic = RelicLibrary.getRelic(relicId);
+                        if (relic != null) {
+                            relicsList.add(relic.makeCopy());
+                        }
+                    } catch (Exception e) {
+                        Hpr.info("无法创建遗物: " + relicId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Hpr.info("创建遗物列表时出错: " + e.getMessage());
+        }
+        return relicsList;
+    }
+
+    /**
+     * 回合开始时抽一张牌并显示在头顶
+     */
+    public void drawCardAtTurnStart() {
+        if (!isRevived || revivedDeck == null || revivedDeck.isEmpty()) {
+            return;
+        }
+
+        // 从牌堆顶部抽一张牌
+        AbstractCard drawnCard = revivedDeck.get(0);
+        revivedDeck.remove(0);
+
+        // 设置显示的卡牌
+        displayedCard = drawnCard.makeCopy();
+
+        // 调整卡牌大小 - 使用较小的缩放比例
+        displayedCard.drawScale = 0.4f;  // 从0.8f改为0.4f，使卡牌更小
+        displayedCard.targetDrawScale = 0.4f;
+float cardDrawX1=this.deadPlayerChosen.drawX-this.deadPlayerChosen.hb_w/2;
+        float cardDrawY1=this.deadPlayerChosen.drawY+this.deadPlayerChosen.hb_h;
+        // 计算卡牌位置 - 使用与updateCardDisplay相同的逻辑
+        float cardDrawX = this.x + (this.hb.width / 2.0f) - (AbstractCard.IMG_WIDTH * displayedCard.drawScale / 2.0f);
+        float cardDrawY = this.y + this.hb.height + 30.0f * Settings.scale;
+
+        displayedCard.current_x = cardDrawX;
+        displayedCard.current_y = cardDrawY;
+        displayedCard.target_x = cardDrawX;
+        displayedCard.target_y = cardDrawY;
+
+        // 设置卡牌的hitbox位置
+        displayedCard.hb.move(cardDrawX, cardDrawY);
+
+        Hpr.info(getCharacterName() + " 回合开始抽牌: " + displayedCard.name);
+    }
+
+    /**
+     * 更新卡牌显示状态
+     */
+    private void updateCardDisplay() {
+        if (displayedCard != null) {
+            // 持续更新卡牌动画和位置
+
+
+
+
+            float cardDrawY =this.deadPlayerChosen.drawY+this.deadPlayerChosen.hb_h;
+
+            // 处理卡牌悬停放大效果
+            if (displayedCard.hb.hovered) {
+                // 鼠标悬停时放大
+                float targetScale = 0.6f; // 悬停时的放大目标
+                if (displayedCard.drawScale < targetScale) {
+                    displayedCard.drawScale += Gdx.graphics.getDeltaTime() * 2.0f; // 平滑放大
+                    displayedCard.drawScale = Math.min(displayedCard.drawScale, targetScale);
+                    displayedCard.targetDrawScale = targetScale;
+                }
+            } else {
+                // 鼠标未悬停时恢复到正常大小
+                float normalScale = 0.4f; // 正常大小
+                if (displayedCard.drawScale > normalScale) {
+                    displayedCard.drawScale -= Gdx.graphics.getDeltaTime() * 2.0f; // 平滑缩小
+                    displayedCard.drawScale = Math.max(displayedCard.drawScale, normalScale);
+                    displayedCard.targetDrawScale = normalScale;
+                }
+            }
+
+            // 重新计算卡牌位置（因为scale可能变化了）
+          float  cardDrawX = this.deadPlayerChosen.drawX-this.deadPlayerChosen.hb_w/2;
+
+            // 设置卡牌位置
+            displayedCard.current_x = cardDrawX;
+            displayedCard.current_y = cardDrawY;
+            displayedCard.target_x = cardDrawX;
+            displayedCard.target_y = cardDrawY;
+
+            // 让卡牌跟随尸体移动
+            if (isDragging) {
+                displayedCard.hb.move(cardDrawX, cardDrawY);
+            }
+            displayedCard.update();
+        }
+    }
+
+    /**
+     * 在游戏回合开始时触发所有复活尸体的抽牌
+     */
+    public static void triggerRevivedDrawPhase() {
+        for (DeadPlayer corpse : deadPlayers) {
+            if (corpse.isRevived && corpse.revivedDeck != null && !corpse.revivedDeck.isEmpty()) {
+                corpse.drawCardAtTurnStart();
+                // 正确使用卡牌：通过动作管理器执行而不是直接调用use()
+                if (corpse.displayedCard != null) {
+                    corpse.executeRevivedCardAction(corpse.displayedCard);
+                }
+            }
+        }
+        Hpr.info("触发复活尸体抽牌阶段");
+    }
+
+    /**
+     * 执行复活尸体的卡牌动作
+     */
+    private void executeRevivedCardAction(AbstractCard card) {
+        if (card == null || deadPlayerChosen == null) {
+            return;
+        }
+
+        try {
+            // 选择目标怪物
+            AbstractMonster targetMonster = null;
+            if (card.target == AbstractCard.CardTarget.ENEMY) {
+                targetMonster = AbstractDungeon.getRandomMonster();
+            }
+
+            // 设置卡牌为尸体使用，确保尸体作为卡牌使用者
+            card.current_x = card.target_x = 0.0f;
+            card.current_y = card.target_y = 0.0f;
+
+            // 让复活尸体作为卡牌使用者使用卡牌
+            if (card.target == AbstractCard.CardTarget.ENEMY && targetMonster != null) {
+                card.calculateCardDamage(targetMonster);
+                card.use(deadPlayerChosen, targetMonster);
+            } else if (card.target != AbstractCard.CardTarget.ENEMY) {
+                card.use(deadPlayerChosen, null);
+            }
+
+            Hpr.info("复活尸体 " + getCharacterName() + " 执行卡牌: " + card.name);
+        } catch (Exception e) {
+            Hpr.info("执行复活尸体卡牌时出错: " + e.getMessage());
+            // 降级方案：直接使用卡牌
+            card.use(deadPlayerChosen, AbstractDungeon.getRandomMonster());
         }
     }
 
@@ -561,6 +776,11 @@ int i=0;
         // 交互方式已改为：右键按住+悬停显示历史记录，左键拖动尸体
 
         // FontHelper.renderFont(sb,FontHelper.largeCardFont,"测试位置",this.x,this.y, Color.WHITE);
+
+        // 渲染头顶显示的卡牌（如果是复活状态且有卡牌要显示）
+        if (displayedCard != null) {
+            displayedCard.render(sb);
+        }
     }
     private static final float HIDE_X = -800.0F * Settings.xScale;
     private float SHOW_X = 300.0F * Settings.xScale;

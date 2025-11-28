@@ -197,8 +197,10 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
 
     @Override
     public void receiveOnPlayerTurnStart() {
-
-
+        // 触发所有复活尸体的抽牌阶段
+        if (CardCrawlGame.isInARun()) {
+            DeadPlayer.triggerRevivedDrawPhase();
+        }
     }
 
     @Override
