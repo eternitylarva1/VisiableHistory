@@ -2,6 +2,7 @@ package VisibleHistory.utils;
 
 import com.badlogic.gdx.math.Vector2;
 import com.megacrit.cardcrawl.core.Settings;
+import com.megacrit.cardcrawl.dungeons.AbstractDungeon;
 import VisibleHistory.playerdeath.DeadPlayer;
 
 import java.util.ArrayList;
@@ -83,20 +84,24 @@ public class CorpsePositionManager {
      * 找到下一个可用位置
      */
     private Vector2 findNextAvailablePosition() {
-        // 先尝试左侧区域
-        Vector2 leftPos = findPositionInArea(LEFT_AREA_X);
-        if (leftPos != null) {
-            return leftPos;
-        }
+        Vector2 position;
+        int attempts = 0;
+        final int maxAttempts = 50; // 最多尝试50次
 
-        // 左侧满了，尝试右侧区域
-        Vector2 rightPos = findPositionInArea(RIGHT_AREA_X);
-        if (rightPos != null) {
-            return rightPos;
-        }
+        do {
+            // 在有效范围内随机分配位置：保留屏幕边缘1/10的空间
+            float minX = Settings.WIDTH * 0.1f;  // 左边1/10
+            float maxX = Settings.WIDTH * 0.9f - CORPSE_WIDTH;  // 右边1/10，减去尸体宽度
+            float minY = Settings.HEIGHT * 0.1f;  // 上边1/10
+            float maxY = Settings.HEIGHT * 0.9f - CORPSE_HEIGHT;  // 下边1/10，减去尸体高度
 
-        // 如果都满了，就在新的一层开始
-        return createNewRowPosition();
+            float x = minX + AbstractDungeon.cardRandomRng.random(maxX - minX);
+            float y = minY + AbstractDungeon.cardRandomRng.random(maxY - minY);
+            position = new Vector2(x, y);
+            attempts++;
+        } while (isPositionOccupied(position) && attempts < maxAttempts);
+
+        return position;
     }
 
     /**
