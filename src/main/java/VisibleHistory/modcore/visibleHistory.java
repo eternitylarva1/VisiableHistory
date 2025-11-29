@@ -6,6 +6,7 @@ import VisibleHistory.playerdeath.DeadPlayer;
 import VisibleHistory.relics.Huixiang;
 import VisibleHistory.utils.Hpr;
 import VisibleHistory.utils.Summary;
+import VisibleHistory.utils.CorpsePositionManager;
 import basemod.*;
 import basemod.helpers.RelicType;
 import basemod.interfaces.*;
@@ -206,6 +207,8 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     @Override
     public void receivePostBattle(AbstractRoom abstractRoom) {
         DeadPlayer.deadPlayers.clear();
+        // 战斗结束，重置位置管理器为下次战斗做准备
+        CorpsePositionManager.getInstance().reset();
     }
 
 
