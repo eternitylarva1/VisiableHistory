@@ -3,6 +3,7 @@ package VisibleHistory.patchs;
 
 
 import VisibleHistory.playerdeath.DeadPlayer;
+import VisibleHistory.modcore.MyModConfig;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.evacipated.cardcrawl.modthespire.lib.*;
@@ -28,7 +29,7 @@ public class CamfirePatch {
         public static void Postfix(AbstractPlayer _instance, SpriteBatch sb) {
             // Add null check for getCurrRoom() to prevent NullPointerException
             if (AbstractDungeon.getCurrRoom() != null && !(AbstractDungeon.getCurrRoom() instanceof RestRoom)) {
-                if (_instance==AbstractDungeon.player) {
+                if (_instance==AbstractDungeon.player && MyModConfig.showCorpses) {
                     for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
                         Color oldcolor = sb.getColor();
                         sb.setColor(Color.WHITE);
@@ -52,7 +53,9 @@ public class CamfirePatch {
 
         @SpirePostfixPatch
         public static void Postfix(AbstractDungeon abstractDungeon,SaveFile _instance) {
-            // 重置位置管理器而不是删除所有尸体
+
+            DeadPlayer.deadPlayers.clear();
+
             VisibleHistory.utils.CorpsePositionManager.getInstance().refreshPositions();
         }
 

@@ -12,6 +12,7 @@ import basemod.helpers.RelicType;
 import basemod.interfaces.*;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -42,8 +43,11 @@ import com.megacrit.cardcrawl.screens.stats.RunData;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 
 import static VisibleHistory.utils.Summary.monsterDefeatStats;
@@ -65,6 +69,22 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     public static boolean hasselected=false;
     public static boolean isfakefire;
     public static HashMap<Integer,Boolean> firemap=new HashMap<>();
+
+    // 新增：尸体堆叠管理系统
+    private static HashMap<String, Integer> characterStackCount = new HashMap<>(); // 角色 -> 堆叠数量
+    private static HashMap<String, Float> characterAssignedX = new HashMap<>(); // 角色 -> 分配的X坐标
+
+    // 防重复调用标记
+    private static boolean battleStartProcessed = false;
+
+    // 预分配的固定X坐标位置（5个角色位置）
+    private static final float[] PRESET_X_POSITIONS = {
+        200.0f,   // 位置1
+        400.0f,   // 位置2
+        600.0f,   // 位置3
+        800.0f,   // 位置4
+        1000.0f   // 位置5
+    };
 
     public static void initialize() throws IOException {
 
@@ -123,12 +143,164 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
 
     @Override
     public void receiveOnBattleStart(AbstractRoom abstractRoom) {
-        generateDeadPlayer();
+        /*
+        // 防止重复调用
+        if (battleStartProcessed) {
+            Hpr.info("战斗开始事件已被处理，跳过重复调用");
+            return;
+        }
+        battleStartProcessed = true;
+*/
+        // 根据配置选择排序模式
+        updateSortModeFromConfig();
+
+        // 添加调试信息
+        Hpr.info("战斗开始，配置: 排序模式=" + (MyModConfig.sortByTime ? "按时间" : "按角色分组") +
+                  ", 堆叠模式=" + (MyModConfig.stackByCharacter ? "开启" : "关闭"));
+
+        if (Summary.sortMode == Summary.SortMode.BY_TIME) {
+            generateDeadPlayerByTime();
+        } else {
+            generateDeadPlayer(); // 原有的按角色分组逻辑
+        }
     }
+
+    // 新增：从配置更新排序模式
+    private void updateSortModeFromConfig() {
+        // 从布尔配置确定排序模式
+        Summary.SortMode newMode = MyModConfig.sortByTime
+            ? Summary.SortMode.BY_TIME
+            : Summary.SortMode.BY_CHARACTER;
+
+        Summary.setSortMode(newMode);
+
+        // 打印配置信息用于调试
+        Hpr.info("配置状态 - 排序模式: " + (MyModConfig.sortByTime ? "按时间" : "按角色分组") +
+                  ", 堆叠模式: " + (MyModConfig.stackByCharacter ? "开启" : "关闭"));
+    }
+
+    // 新增：尸体堆叠位置管理
+    private void initCharacterStacking() {
+        characterStackCount.clear(); // 重置堆叠计数
+        characterAssignedX.clear(); // 重置分配的X坐标
+        Hpr.info("初始化尸体堆叠系统，堆叠模式: " + (MyModConfig.stackByCharacter ? "开启" : "关闭"));
+    }
+
+    private float[] getStackedPosition(String characterName) {
+        if (!MyModConfig.stackByCharacter) {
+            // 不使用堆叠，返回随机位置
+            return new float[]{Hpr.getRandomPositionX(), Hpr.getRandomPositionY()};
+        }
+
+        // 获取该角色已分配的X坐标，如果没有则分配一个
+        Float assignedX = characterAssignedX.get(characterName);
+        if (assignedX == null) {
+
+            int positionIndex = Math.abs(characterName.hashCode() % 20);
+            assignedX = (float) (Settings.WIDTH/20*positionIndex);
+            characterAssignedX.put(characterName, assignedX);
+            Hpr.info("为角色 " + characterName + " 分配X坐标: " + assignedX);
+        }
+
+        // 获取当前堆叠数量
+        int stackCount = characterStackCount.getOrDefault(characterName, 0);
+
+        // 计算Y位置（堆叠间距 80 像素，不使用Settings.scale避免0值）
+        float stackOffset = 80.0f;
+        float baseY = 300.0f;
+        float currentY = baseY + (stackCount * stackOffset);
+
+        // 增加该角色的堆叠计数
+        characterStackCount.put(characterName, stackCount + 1);
+
+        Hpr.info("角色 " + characterName + " 堆叠位置: X=" + assignedX + ", Y=" + currentY + " (堆叠层数: " + (stackCount + 1) + ")");
+
+        return new float[]{assignedX, currentY};
+    }
+
+    public void generateDeadPlayerByTime() {
+        DeadPlayer.deadPlayers.clear();
+        // 重置hover缓存
+        DeadPlayer.invalidateHoverCache();
+
+        // 初始化堆叠系统
+        initCharacterStacking();
+
+        // 获取当前怪物对应的「角色-失败记录」映射（和原逻辑一样）
+        Map<String, Summary.FailureRecord> monsterFailureRecords = Summary.getCharacterFailureRecords(lastCombatMetricKey);
+
+        if (monsterFailureRecords == null || monsterFailureRecords.isEmpty()) {
+            Hpr.info("当前怪物 " + lastCombatMetricKey + " 没有击败任何角色");
+            return;
+        }
+
+        // 收集当前怪物的所有失败RunData并按时间排序
+        List<RunData> currentMonsterRuns = new ArrayList<>();
+        for (Summary.FailureRecord record : monsterFailureRecords.values()) {
+            currentMonsterRuns.addAll(record.runList);
+        }
+
+        // 按时间戳降序排序（最新的在前）
+        currentMonsterRuns = currentMonsterRuns.stream()
+                .sorted((run1, run2) -> {
+                    try {
+                        long time1 = Long.parseLong(run1.timestamp);
+                        long time2 = Long.parseLong(run2.timestamp);
+                        return Long.compare(time2, time1); // 降序：最新的在前
+                    } catch (NumberFormatException e) {
+                        // 时间戳解析失败时，按文件名字母顺序
+                        return run2.timestamp.compareTo(run1.timestamp);
+                    }
+                })
+                .collect(Collectors.toList());
+
+        Hpr.info("当前怪物 " + lastCombatMetricKey + " 击败了 " + currentMonsterRuns.size() + " 个角色（按时间排序）");
+
+        // 按时间顺序生成尸体，最多生成配置的尸体数量
+        int maxCorpse = MyModConfig.DeadPlayerMax;
+        int created = 0;
+
+        for (RunData runData : currentMonsterRuns) {
+            if (created >= maxCorpse) break;
+            if (DeadPlayer.deadPlayers.size() >= maxCorpse) break;
+
+            try {
+                // 解析角色类、获取角色尸体图片
+                AbstractPlayer.PlayerClass playerClass = AbstractPlayer.PlayerClass.valueOf(runData.character_chosen);
+                AbstractPlayer player = CardCrawlGame.characterManager.getCharacter(playerClass);
+                Texture corpseImg = player.corpseImg;
+
+                // 使用堆叠系统获取位置
+                float[] position = getStackedPosition(runData.character_chosen);
+
+                // 创建 DeadPlayer（使用堆叠位置）
+                DeadPlayer deadPlayer = new DeadPlayer(
+                        position[0],  // X坐标（可能堆叠）
+                        position[1],  // Y坐标（递增）
+                        corpseImg,
+                        runData
+                );
+
+                DeadPlayer.deadPlayers.add(deadPlayer);
+                created++;
+
+            } catch (IllegalArgumentException e) {
+                Hpr.info("无效角色类：" + runData.character_chosen + "，跳过该角色的尸体生成");
+            } catch (Exception e) {
+                Hpr.info("创建尸体时出错：" + e.getMessage() + "，跳过该角色");
+            }
+        }
+
+        Hpr.info("当前怪物按时间排序生成了 " + created + " 个尸体，当前尸体总数：" + DeadPlayer.deadPlayers.size());
+    }
+
     public void generateDeadPlayer(){
         DeadPlayer.deadPlayers.clear();
         // 重置hover缓存
         DeadPlayer.invalidateHoverCache();
+
+        // 初始化堆叠系统
+        initCharacterStacking();
 
 // 1. 获取当前怪物对应的「角色-失败记录」映射（替换原有的次数映射）
         Map<String, Summary.FailureRecord> monsterFailureRecords = Summary.getCharacterFailureRecords(lastCombatMetricKey);
@@ -144,10 +316,13 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
 
                     // 3. 遍历该角色被当前怪物击败的所有 RunData（一个 RunData 对应一个 DeadPlayer）
                     for (RunData runData : failureRecord.runList) {
-                        // 4. 传入随机位置、尸体图片、对应 RunData 创建 DeadPlayer
+                        // 使用堆叠系统获取位置
+                        float[] position = getStackedPosition(character);
+
+                        // 4. 传入堆叠位置、尸体图片、对应 RunData 创建 DeadPlayer
                         DeadPlayer deadPlayer = new DeadPlayer(
-                                Hpr.getRandomPositionX(),
-                                Hpr.getRandomPositionY(),
+                                position[0],  // X坐标（可能堆叠）
+                                position[1],  // Y坐标（递增）
                                 corpseImg,
                                 runData  // 新增：传入当前失败对局的 RunData
                         );
@@ -163,8 +338,8 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
                 } catch (IllegalArgumentException e) {
                     // 异常处理：避免无效角色类导致崩溃（保留容错性）
                     Hpr.info("无效角色类：" + character + "，跳过该角色的尸体生成");
-                } catch (ParseException e) {
-                    throw new RuntimeException(e);
+                } catch (Exception e) {
+                    Hpr.info("处理角色时出错：" + e.getMessage() + "，跳过该角色");
                 }
             });
         }
@@ -199,9 +374,7 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
     @Override
     public void receiveOnPlayerTurnStart() {
         // 触发所有复活尸体的抽牌阶段
-        if (CardCrawlGame.isInARun()) {
-            DeadPlayer.triggerRevivedDrawPhase();
-        }
+
     }
 
     @Override
@@ -225,17 +398,26 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
 
     @Override
     public void receivePostUpdate() {
+        // 检测T键切换尸体显示
+        if (Gdx.input.isKeyJustPressed(Input.Keys.T)) {
+            MyModConfig.showCorpses = !MyModConfig.showCorpses;
+            Hpr.info("尸体显示已" + (MyModConfig.showCorpses ? "开启" : "关闭"));
+        }
+
         if (CardCrawlGame.isInARun()) {
-            // 处理尸体移除（在更新前执行，避免并发修改异常）
-            DeadPlayer.processRemovals();
+            // 只有在显示尸体时才更新和渲染
+            if (MyModConfig.showCorpses) {
+                // 处理尸体移除（在更新前执行，避免并发修改异常）
+                DeadPlayer.processRemovals();
 
-            // 标记hover缓存需要更新（每帧更新一次以确保鼠标移动时能正确响应）
-            DeadPlayer.invalidateHoverCache();
-            // 处理全局鼠标输入（拖动）
-            DeadPlayer.handleGlobalMouseInput();
+                // 标记hover缓存需要更新（每帧更新一次以确保鼠标移动时能正确响应）
+                DeadPlayer.invalidateHoverCache();
+                // 处理全局鼠标输入（拖动）
+                DeadPlayer.handleGlobalMouseInput();
 
-            for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
-                deadPlayer.update();
+                for (DeadPlayer deadPlayer : DeadPlayer.deadPlayers) {
+                    deadPlayer.update();
+                }
             }
         }
     }

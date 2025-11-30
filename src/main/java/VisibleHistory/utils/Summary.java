@@ -20,8 +20,20 @@ public class Summary {
     // Gson解析工具
     private static final Gson gson = new Gson();
 
+    // 排序选项
+    public enum SortMode {
+        BY_CHARACTER,  // 按角色分组（当前默认行为）
+        BY_TIME        // 按时间排序
+    }
+
+    // 当前排序模式（默认按角色分组）
+    public static SortMode sortMode = SortMode.BY_CHARACTER;
+
     // 原有核心结构：怪物 -> (角色 -> 被击败次数)（保留，方便快速查询次数）
     public static Map<String, Map<String, Integer>> monsterDefeatStats = new HashMap<>();
+
+    // 新增：按时间排序的失败对局列表（用于按时间排序模式）
+    public static List<RunData> sortedFailedRuns = new ArrayList<>();
 
     // 新增核心结构：怪物 -> (角色 -> 失败记录（次数+对应RunData列表）)（用于关联对局数据）
     public static Map<String, Map<String, FailureRecord>> monsterDefeatDetails = new HashMap<>();
@@ -47,6 +59,7 @@ public class Summary {
     public static void load() {
         loadRunData();               // 加载本地对局数据
         calculateMonsterDefeatStats();  // 按怪物为键统计（次数+RunData关联）
+        sortFailedRuns();           // 按时间排序失败对局
     }
 
     // 加载本地存储的对局数据（保留你已加的runs.clear()）
@@ -119,6 +132,57 @@ public class Summary {
         printSortedMonsterDefeatStats();
     }
 
+    // 新增：按时间排序失败对局
+    private static void sortFailedRuns() {
+        sortedFailedRuns.clear();
+
+        // 筛选所有失败的对局
+        List<RunData> failedRuns = runs.stream()
+                .filter(run -> !run.victory)
+                .collect(Collectors.toList());
+
+        // 按时间戳降序排序（最新的在前）
+        sortedFailedRuns = failedRuns.stream()
+                .sorted((run1, run2) -> {
+                    try {
+                        long time1 = Long.parseLong(run1.timestamp);
+                        long time2 = Long.parseLong(run2.timestamp);
+                        return Long.compare(time2, time1); // 降序：最新的在前
+                    } catch (NumberFormatException e) {
+                        // 时间戳解析失败时，按文件名字母顺序
+                        return run2.timestamp.compareTo(run1.timestamp);
+                    }
+                })
+                .collect(Collectors.toList());
+
+        Hpr.info("按时间排序失败对局完成，共 " + sortedFailedRuns.size() + " 条记录");
+    }
+
+    // 新增：获取按时间排序的尸体数据（用于 DeadPlayer 生成）
+    /**
+     * 获取排序后的尸体数据
+     * @return 按当前排序模式返回的尸体数据列表
+     */
+    public static List<RunData> getSortedCorpseData() {
+        if (sortMode == SortMode.BY_TIME) {
+            return sortedFailedRuns;
+        } else {
+            // 按角色分组模式：使用原有逻辑（怪物分组 -> 角色分组）
+            return getAllFailedRunsFlat();
+        }
+    }
+
+    // 辅助方法：将怪物分组的数据平铺为列表（按角色分组模式使用）
+    private static List<RunData> getAllFailedRunsFlat() {
+        List<RunData> allRuns = new ArrayList<>();
+        for (Map<String, FailureRecord> characterRecords : monsterDefeatDetails.values()) {
+            for (FailureRecord record : characterRecords.values()) {
+                allRuns.addAll(record.runList);
+            }
+        }
+        return allRuns;
+    }
+
     // 排序并打印统计结果（保留你的排序逻辑，补充RunData数量提示）
     private static void printSortedMonsterDefeatStats() {
         Hpr.info("===== 怪物击败角色统计（按怪物分组） =====");
@@ -171,5 +235,17 @@ public class Summary {
      */
     public static Map<String, FailureRecord> getCharacterFailureRecords(String monster) {
         return monsterDefeatDetails.getOrDefault(monster, new HashMap<>());
+    }
+
+    // 新增：切换排序模式
+    /**
+     * 切换排序模式并重新加载数据
+     * @param newMode 新的排序模式
+     */
+    public static void setSortMode(SortMode newMode) {
+        if (sortMode != newMode) {
+            sortMode = newMode;
+            Hpr.info("排序模式已切换为: " + (newMode == SortMode.BY_TIME ? "按时间排序" : "按角色分组"));
+        }
     }
 }
