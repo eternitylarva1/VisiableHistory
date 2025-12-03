@@ -1262,7 +1262,7 @@ int i=0;
             tinyCard.render(sb);
             cardCount += tinyCard.count;
         }
-        this.layoutTinyCards((ArrayList<TinyCard>) cards, this.screenX + this.screenPosX(90.0F), y);
+        this.layoutTinyCards((ArrayList<TinyCard>) cards, this.screenX + this.screenPosX(90.0F), y-100);
         String      LABEL_WITH_COUNT_IN_PARENS = TEXT[21];
         String mainText = String.format(LABEL_WITH_COUNT_IN_PARENS, new Object[] { TEXT[9], Integer.valueOf(cardCount) });
         renderSubHeadingWithMessage(sb, mainText, "", x, y-100);

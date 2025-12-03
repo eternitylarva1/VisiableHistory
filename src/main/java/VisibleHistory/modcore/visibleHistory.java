@@ -3,7 +3,7 @@ package VisibleHistory.modcore;
 
 import VisibleHistory.cards.CorpseRevival;
 import VisibleHistory.playerdeath.DeadPlayer;
-import VisibleHistory.relics.Huixiang;
+
 import VisibleHistory.utils.Hpr;
 import VisibleHistory.utils.Summary;
 import VisibleHistory.utils.CorpsePositionManager;
@@ -36,6 +36,7 @@ import com.megacrit.cardcrawl.localization.UIStrings;
 import com.megacrit.cardcrawl.relics.AbstractRelic;
 import com.megacrit.cardcrawl.rooms.AbstractRoom;
 import com.megacrit.cardcrawl.rooms.MonsterRoom;
+import com.megacrit.cardcrawl.screens.CombatRewardScreen;
 import com.megacrit.cardcrawl.screens.charSelect.CharacterSelectScreen;
 import com.megacrit.cardcrawl.screens.runHistory.RunHistoryScreen;
 import com.megacrit.cardcrawl.screens.stats.RunData;
@@ -102,7 +103,6 @@ public class visibleHistory implements PostUpdateSubscriber,PostRenderSubscriber
 
     @Override
     public void receiveEditRelics() {
-        BaseMod.addRelic(new Huixiang(), RelicType.SHARED);
     }
 
     @Override

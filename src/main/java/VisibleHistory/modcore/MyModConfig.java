@@ -27,7 +27,7 @@ public class MyModConfig extends EasyConfigPanel {
     public static boolean ctrlClickTransform = true;
 
     // 新增：排序模式配置（false=按角色分组，true=按时间排序）
-    public static boolean sortByTime = false;
+    public static boolean sortByTime = true;
 
     // 新增：尸体堆叠显示配置（true=同角色尸体堆叠，false=随机位置）
     public static boolean stackByCharacter = false;
