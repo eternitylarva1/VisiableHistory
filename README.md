@@ -13,9 +13,9 @@ Visible History 是一个为《杀戮尖塔》开发的模组，通过在战场�
 ## ✨ 主要功能
 
 - 💀 **死亡历史展示**: 将前玩家的死亡记录保存为战场上的尸体
-- 🎮 **智能交互**: 支持与游戏原版机制无缝集成
+- 🎮 **智能交互**: 自由移动和查看当时的历史记录，可以附身到尸体上或者复活尸体
 - 📊 **数据持久化**: 可靠的死亡数据存储和检索
-- 🎨 **视觉优化**: 精美的视觉效果和动画
+- 🎨 **视觉优化**: 复活的尸体的出牌动画
 - 📋 **配置灵活**: 可自定义的配置选项
 
 ## 🚀 快速开始
@@ -73,7 +73,6 @@ VisibleHistory/
 │   ├── cards/                       # 卡牌实现
 │   ├── helpers/                     # 工具类
 │   ├── modcore/                     # 核心功能
-│   ├── monstercards/               # 怪物卡牌系统
 │   ├── patchs/                      # 代码补丁
 │   ├── playerdeath/                # 玩家死亡处理
 │   ├── powers/                      # 能力系统
@@ -87,9 +86,9 @@ VisibleHistory/
 ### 核心组件
 
 - **主模组类** (`VisibleHistory.java`): 模组的入口点
-- **怪物卡牌系统**: 基于真实怪物行为的卡牌实现
 - **死亡记录系统**: 追踪和显示玩家死亡历史
 - **视觉效果**: 战场尸体的渲染和动画
+- **补丁系统**: 代码注入和功能扩展
 
 ## 🛠️ 开发环境
 
@@ -166,7 +165,7 @@ mvn clean
 
 - **Issues**: [GitHub Issues](https://github.com/your-repo/VisibleHistory/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/your-repo/VisibleHistory/discussions)
-- **Email**: your-email@example.com
+- **Email**: 2674610176@qq.com
 
 ---
 
